@@ -1,0 +1,15 @@
+amqp==1.4.9
+anyjson==0.3.3
+billiard==3.3.0.23
+celery==3.1.23
+falcon==1.0.0rc2
+gunicorn==19.4.5
+kombu==3.0.35
+psycopg2==2.6.1
+python-mimeparse==1.5.2
+pytz==2016.4
+redis==2.10.5
+requests==2.10.0
+six==1.10.0
+SQLAlchemy==1.0.12
+ujson==1.35
