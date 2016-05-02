@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
+
 from wsgiref import simple_server
-from task import query_table, query_row
+from task import query_table, query_row, post_request
+from logger import logger
 
 import falcon
 
+SN_USE_ASYNC = 'X-SN-Async'
 SN_USERNAME = 'X-SN-Username'
 SN_PASSWORD = 'X-SN-Password'
 
@@ -21,9 +24,11 @@ MAXIMUM_QUERY_LIMIT = 50
 
 
 def validate_wf_context(req, resp, resource, params):
-    context = req.get_header(WF_CONTEXT_HEADER)
-    if not context:
-        raise falcon.HTTPBadRequest('Bad Request', 'Workflow Context ID is required')
+    is_async = req.get_header(SN_USE_ASYNC)
+    if is_async:
+        context = req.get_header(WF_CONTEXT_HEADER)
+        if not context:
+            raise falcon.HTTPBadRequest('Bad Request', 'Workflow Context ID is required')
 
 
 class Table(object):
@@ -40,15 +45,22 @@ class Table(object):
         offset = self._get_offset_param(req)
         resp.append_header(TABLE_QUERY_OFFSET_HEADER, str(offset))
 
-        resp.append_header(WF_CONTEXT_HEADER, req.get_header(WF_CONTEXT_HEADER))
-
         try:
-            result = query_table.delay(name, limit, offset, **compose_post_params(req))
-            payload, count = result.get(timeout=10, propagate=True)
-            if payload:
-                resp.append_header(TABLE_QUERY_RETURN_COUNT, str(count))
-                resp.status = falcon.HTTP_200
-                resp.body = payload
+            is_async = req.get_header(SN_USE_ASYNC)
+            kwargs = compose_post_params(req)
+            if not is_async:
+                logger.info("Synchronous request")
+                result = query_table.delay(name, limit, offset, **kwargs)
+                payload, count = result.get(timeout=10, propagate=True)
+                if payload:
+                    resp.append_header(TABLE_QUERY_RETURN_COUNT, str(count))
+                    resp.body = payload
+            else:
+                logger.info("Asynchronous request")
+                kwargs['is_async'] = is_async
+                post_request.delay(**kwargs)
+                resp.body = u'{"status": "Your request has been queued"}'
+            resp.status = falcon.HTTP_200
         except Exception, e:
             raise falcon.HTTPBadRequest('Bad Request', str(e))
 
@@ -88,20 +100,28 @@ class Row(object):
         primary_key = req.get_header(TABLE_QUERY_PRIMARY_KEY) if req.get_header(TABLE_QUERY_PRIMARY_KEY) else 'id'
 
         try:
+            is_async = req.get_header(SN_USE_ASYNC)
             kwargs = compose_post_params(req)
-            kwargs['pk'] = primary_key
-            result = query_row.delay(name, id, **kwargs)
-            payload = result.get(timeout=10, propagate=True)
-            if payload:
-                resp.status = falcon.HTTP_200
-                resp.body = payload
+            if not is_async:
+                logger.info("Synchronous request")
+                kwargs['pk'] = primary_key
+                result = query_row.delay(name, id, **kwargs)
+                payload = result.get(timeout=10, propagate=True)
+                if payload:
+                    resp.body = payload
+            else:
+                logger.info("Asynchronous request")
+                kwargs['is_async'] = is_async
+                post_request.delay(**kwargs)
+                resp.body = u'{"status": "Your request has been queued"}'
+            resp.status = falcon.HTTP_200
         except Exception, e:
             raise falcon.HTTPBadRequest('Bad Request', str(e))
 
 
 def compose_post_params(req):
     context = req.get_header(WF_CONTEXT_HEADER)
-    event_name = req.get_header(WF_EVENT_NAME)
+    event_name = req.get_header(WF_EVENT_NAME) if req.get_header(WF_EVENT_NAME) else 'orc_event'
     sn_username = req.get_header(SN_USERNAME)
     sn_password = req.get_header(SN_PASSWORD)
     return {
