@@ -6,6 +6,7 @@ from logger import logger
 
 import falcon
 
+SN_HOSTNAME = 'X-SN-Hostname'
 SN_USE_ASYNC = 'X-SN-Async'
 SN_USERNAME = 'X-SN-Username'
 SN_PASSWORD = 'X-SN-Password'
@@ -120,13 +121,15 @@ class Row(object):
 
 
 def compose_post_params(req):
+    hostname = req.get_header(SN_HOSTNAME) if req.get_header(SN_HOSTNAME) else req.remote_addr
     context = req.get_header(WF_CONTEXT_HEADER)
     event_name = req.get_header(WF_EVENT_NAME) if req.get_header(WF_EVENT_NAME) else 'orc_event'
     sn_username = req.get_header(SN_USERNAME)
     sn_password = req.get_header(SN_PASSWORD)
     return {
-        'protocol': req.protocol,
-        'host': req.remote_addr,
+        # 'protocol': req.protocol,
+        'protocol': 'https',
+        'host': hostname,
         'port': 8080,
         'context_id': context,
         'event_name': event_name,

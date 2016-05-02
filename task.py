@@ -4,7 +4,7 @@ import requests
 from celery import Celery
 import time
 import ujson
-from requests.auth import HTTPDigestAuth
+from requests.auth import HTTPBasicAuth
 from logger import logger
 
 from db import fetch_from_table, fetch_one_row
@@ -14,6 +14,7 @@ BACKEND_URL = 'redis://localhost:6379/1'
 
 celery_app = Celery('tasks', broker=BROKER_URL, backend=BACKEND_URL)
 
+# TODO: replace this with the final WS path
 SN_EVENT_PATH = '/api/now/v1/wf/context/{context_id}/{event_name}'
 
 
@@ -51,6 +52,7 @@ def post_request(**kwargs):
 
     logger.info("Parameters + " + str(kwargs))
     path = SN_EVENT_PATH.format(**kwargs)
-    url = '{protocol}://{host}:{port}{path}'.format(path=path, **kwargs)
+    # url = '{protocol}://{host}:{port}{path}'.format(path=path, **kwargs)
+    url = '{protocol}://{host}{path}'.format(path=path, **kwargs)
     logger.info('Post request to %s' % (url,))
-    requests.post(url, auth=HTTPDigestAuth(kwargs['sn_username'], kwargs['sn_password']))
+    requests.post(url, auth=HTTPBasicAuth(kwargs['sn_username'], kwargs['sn_password']))
